@@ -102,7 +102,20 @@ tbody tr:hover td { background: var(--bg3); }
   .charts-row, .top-split { grid-template-columns: 1fr; }
   .topbar, .content { padding-left: 16px; padding-right: 16px; }
 }
-@media (max-width: 580px) { .metrics-grid { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 580px) {
+  .metrics-grid { grid-template-columns: repeat(2,1fr); }
+  .metric-value { font-size: 15px; }
+  .metric.hl { grid-column: span 1; }
+  /* card métricas mes más destacado en mobile */
+  .metrics-grid { gap: 8px; }
+  .metric.hl .metric-value { font-size: 18px; }
+  .topbar { padding: 12px 14px; gap: 8px; }
+  .page-title { font-size: 14px; }
+  .content { padding: 12px 12px 40px; }
+  .chart-card, .table-card { padding: 12px; }
+  table { font-size: 11px; }
+  th, td { padding: 6px 8px; }
+}
 </style>
 </head>
 <body>
@@ -428,27 +441,29 @@ function renderDiario(dm){
 function renderTablaDiaria(by, maxD, y, m){
   let cumArs=0, cumUsd=0;
   const hoy=new Date();
+  // Si el mes activo es el actual, cortar en hoy; si es pasado, mostrar todo
+  const mesActualY=hoy.getFullYear(), mesActualM=hoy.getMonth()+1;
+  const esMesActual=(y===mesActualY&&m===mesActualM);
+  const limiteDia=esMesActual?hoy.getDate():maxD;
   const rows=[];
-  for(let i=1;i<=maxD;i++){
+  for(let i=1;i<=limiteDia;i++){
     const v=by[i]||{ars:0,usd:0};
     cumArs+=v.ars; cumUsd+=v.usd;
     const fecha=new Date(y,m-1,i);
-    const esFuturo=fecha>hoy;
     const esHoy=fecha.toDateString()===hoy.toDateString();
     const esFinde=fecha.getDay()===0||fecha.getDay()===6;
     const tieneData=v.ars>0||v.usd>0;
     let rowStyle='';
-    if(esHoy)rowStyle='background:rgba(74,222,128,0.06);';
-    else if(esFinde&&!tieneData)rowStyle='opacity:0.4;';
-    else if(esFuturo&&!tieneData)rowStyle='opacity:0.3;';
+    if(esHoy)rowStyle='background:rgba(74,222,128,0.07);';
+    else if(esFinde&&!tieneData)rowStyle='opacity:0.35;';
     const dd=String(i).padStart(2,'0');
-    const mm=String(m).padStart(2,'0');
+    const mm2=String(m).padStart(2,'0');
     rows.push(`<tr style="${rowStyle}">
-      <td class="mono" style="font-size:11px;color:${esHoy?'#4ade80':'#8a9a8c'}">${dd}/${mm}</td>
-      <td class="right mono" style="font-size:11px;color:${tieneData?'#e8ede9':'#566058'}">${tieneData||v.ars>0?fARS(v.ars):'—'}</td>
-      <td class="right mono" style="font-size:11px;font-weight:${esHoy?'500':'400'};color:${esHoy?'#4ade80':'#8a9a8c'}">${fARS(cumArs)}</td>
-      <td class="right mono" style="font-size:11px;color:${v.usd>0?'#60a5fa':'#566058'}">${v.usd>0?fUSD(v.usd):'—'}</td>
-      <td class="right mono" style="font-size:11px;color:${esHoy?'#60a5fa':'#8a9a8c'}">${fUSD(cumUsd)}</td>
+      <td style="font-size:11px;color:${esHoy?'#4ade80':'#8a9a8c'};white-space:nowrap;width:48px">${dd}/${mm2}</td>
+      <td class="right mono" style="font-size:11px;color:${tieneData?'#e8ede9':'#566058'};width:110px">${v.ars>0?fARS(v.ars):'—'}</td>
+      <td class="right mono" style="font-size:11px;font-weight:${esHoy?'500':'400'};color:${esHoy?'#4ade80':'#8a9a8c'};width:120px">${fARS(cumArs)}</td>
+      <td class="right mono" style="font-size:11px;color:${v.usd>0?'#60a5fa':'#566058'};width:80px">${v.usd>0?fUSD(v.usd):'—'}</td>
+      <td class="right mono" style="font-size:11px;color:${esHoy?'#60a5fa':'#8a9a8c'};width:80px">${fUSD(cumUsd)}</td>
     </tr>`);
   }
   document.querySelector('#tDiario tbody').innerHTML=rows.join('');
