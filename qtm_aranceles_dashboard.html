@@ -265,14 +265,22 @@ function showEl(w,msg){
 
 function cargar(){
   showEl('load');
+  // Intento 1: fetch directo (funciona si el HTML está en servidor/GitHub Pages)
   fetch(CSV_URL)
     .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();})
-    .then(procesar)
+    .then(txt=>{if(!txt||txt.startsWith('<'))throw new Error('no es CSV');procesar(txt);})
     .catch(()=>{
-      fetch('https://api.allorigins.win/get?url='+encodeURIComponent(CSV_URL))
-        .then(r=>r.json())
-        .then(d=>{if(!d.contents)throw new Error('vacío');procesar(d.contents);})
-        .catch(e=>showEl('err','No se pudieron cargar los datos. Verificá la conexión o que la sheet esté publicada. ('+e.message+')'));
+      // Intento 2: corsproxy.io (devuelve texto directo)
+      fetch('https://corsproxy.io/?'+encodeURIComponent(CSV_URL))
+        .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();})
+        .then(txt=>{if(!txt||txt.startsWith('<'))throw new Error('no es CSV');procesar(txt);})
+        .catch(()=>{
+          // Intento 3: allorigins como JSON
+          fetch('https://api.allorigins.win/get?url='+encodeURIComponent(CSV_URL))
+            .then(r=>r.json())
+            .then(d=>{if(!d.contents)throw new Error('vacío');procesar(d.contents);})
+            .catch(e=>showEl('err','No se pudieron cargar los datos. Si estás abriendo el archivo localmente (file://), subilo a GitHub Pages o Google Sites. ('+e.message+')'));
+        });
     });
 }
 
@@ -283,15 +291,19 @@ function procesar(txt){
   ALL=r.data.map(row=>{
     const conc=pFecha(row['Fecha de Concertaci\u00f3n']||row['Fecha de Concertacion']||'');
     const venc=pFecha(row['Fecha de Vencimiento']||'');
-    const ars=pNum(row['Total QTM Ars']||row['Total QTM ARS']||'0');
-    const usd=pNum(row['Dolar MEP']||row['D\u00f3lar MEP']||'0');
+    const moneda=(row['Moneda']||'').trim();
+    const tipo=(row['Tipo']||'').trim();
     const arancel=pNum(row['Arancel']||'0');
+    // Solo Boletos y Aranceles generan Total QTM; Intereses = 0
+    const esBoleto=tipo==='Boletos'||tipo==='Aranceles';
+    const totalQtm=esBoleto?pNum(row['Total QTM']||row['Total QTM Ars']||row['Total QTM ARS']||'0'):0;
+    // ARS si Moneda=Pesos, USD si cualquier otra moneda
+    const ars=moneda==='Pesos'?totalQtm:0;
+    const usd=moneda!=='Pesos'?totalQtm:0;
     return{
       comitente:(row['Comitente - N\u00famero']||'').trim(),
       nombre:(row['Comitente - Descripci\u00f3n']||row['Comitente - Descripcion']||'').trim(),
-      moneda:(row['Moneda']||'').trim(),
-      tipo:(row['Tipo']||'').trim(),
-      arancel,ars,usd,conc,venc,
+      moneda,tipo,arancel,ars,usd,conc,venc,
     };
   }).filter(d=>d.conc);
   if(!ALL.length){showEl('err','No se encontraron filas válidas.');return;}
