@@ -383,26 +383,43 @@ function renderDiario(dm){
     arsAcum.push(cumArs); usdAcum.push(cumUsd);
   }
   if(charts.diario)charts.diario.destroy();
+  // Calcular máximos para escalar bien cada eje
+  const maxArs=Math.max(...arsAcum,1);
+  const maxUsd=Math.max(...usdAcum,1);
   charts.diario=new Chart(document.getElementById('cDiario'),{
     data:{labels,datasets:[
       {type:'bar',label:'ARS día',data:ars,backgroundColor:'rgba(74,222,128,0.65)',borderRadius:3,yAxisID:'y',order:2},
-      {type:'bar',label:'USD día',data:usd,backgroundColor:'rgba(96,165,250,0.65)',borderRadius:3,yAxisID:'y2',order:2},
+      {type:'bar',label:'USD día',
+        // Escalar USD visualmente al eje ARS para que las barras sean comparables
+        data:usd.map(v=>v*(maxArs/maxUsd)),
+        backgroundColor:'rgba(96,165,250,0.65)',borderRadius:3,yAxisID:'y',order:2},
       {type:'line',label:'Acum. ARS',data:arsAcum,borderColor:'rgba(167,139,250,0.9)',backgroundColor:'transparent',borderWidth:2,pointRadius:0,pointHoverRadius:3,tension:0.3,yAxisID:'y',order:1},
-      {type:'line',label:'Acum. USD',data:usdAcum,borderColor:'rgba(56,189,248,0.9)',backgroundColor:'transparent',borderWidth:2,pointRadius:0,pointHoverRadius:3,tension:0.3,yAxisID:'y2',order:1},
-    ]},
+      {type:'line',label:'Acum. USD',
+        data:usdAcum.map(v=>v*(maxArs/maxUsd)),
+        borderColor:'rgba(56,189,248,0.9)',backgroundColor:'transparent',borderWidth:2,pointRadius:0,pointHoverRadius:3,tension:0.3,yAxisID:'y',order:1},
+    ],
+    // guardar datos reales para tooltip
+    _usd:usd,_usdAcum:usdAcum},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{
         label:ctx=>{
-          if(ctx.dataset.label==='ARS día')return ' ARS día: '+fARS(ctx.raw);
-          if(ctx.dataset.label==='USD día')return ' USD día: '+fUSD(ctx.raw);
-          if(ctx.dataset.label==='Acum. ARS')return ' Acum. ARS: '+fARS(ctx.raw);
-          if(ctx.dataset.label==='Acum. USD')return ' Acum. USD: '+fUSD(ctx.raw);
+          const chart=ctx.chart;
+          if(ctx.datasetIndex===0)return ' ARS día: '+fARS(ctx.raw);
+          if(ctx.datasetIndex===1)return ' USD día: '+fUSD(chart.data._usd[ctx.dataIndex]);
+          if(ctx.datasetIndex===2)return ' Acum. ARS: '+fARS(ctx.raw);
+          if(ctx.datasetIndex===3)return ' Acum. USD: '+fUSD(chart.data._usdAcum[ctx.dataIndex]);
         }
       }}},
       scales:{
         x:{ticks:{autoSkip:false,maxRotation:0,font:{size:9},color:'#566058'},grid:{color:'rgba(255,255,255,0.04)'}},
-        y:{position:'left',ticks:{callback:v=>'$'+Math.round(v/1000)+'k',font:{size:9},color:'#566058'},grid:{color:'rgba(255,255,255,0.05)'}},
-        y2:{position:'right',ticks:{callback:v=>'U$S '+v.toFixed(0),font:{size:9},color:'#566058'},grid:{display:false}},
+        y:{position:'left',
+          ticks:{callback:v=>'$'+Math.round(v/1000)+'k',font:{size:9},color:'#4ade80'},
+          grid:{color:'rgba(255,255,255,0.05)'}},
+        // eje derecho como referencia visual USD (escala real)
+        y2:{display:true,position:'right',
+          min:0,max:maxUsd*1.1,
+          ticks:{callback:v=>'U$S '+Math.round(v),font:{size:9},color:'#60a5fa'},
+          grid:{display:false}},
       }}
   });
   renderTablaDiaria(by, maxD, +y, +m);
