@@ -161,11 +161,34 @@ tbody tr:hover td { background: var(--bg3); }
           <div class="card-title">Aranceles diarios — mes seleccionado</div>
           <div class="card-sub">ARS (eje izq.) · USD MEP (eje der.)</div>
           <div class="legend">
-            <span class="leg"><span class="leg-sq" style="background:#4ade80"></span>Total QTM ARS</span>
-            <span class="leg"><span class="leg-sq" style="background:#60a5fa"></span>USD MEP</span>
+            <span class="leg"><span class="leg-sq" style="background:#4ade80"></span>ARS día</span>
+            <span class="leg"><span class="leg-sq" style="background:#60a5fa"></span>USD día</span>
+            <span class="leg"><span class="leg-sq" style="background:#a78bfa;border-radius:50%"></span>Acum. ARS</span>
+            <span class="leg"><span class="leg-sq" style="background:#38bdf8;border-radius:50%"></span>Acum. USD</span>
           </div>
-          <div style="position:relative;width:100%;height:240px">
+          <div style="position:relative;width:100%;height:260px">
             <canvas id="cDiario" role="img" aria-label="Aranceles diarios ARS y USD del mes seleccionado"></canvas>
+          </div>
+        </div>
+
+        <div class="table-card" id="secDiario" style="margin-bottom:16px">
+          <div class="table-head">
+            <div>
+              <div class="card-title">Evolución diaria</div>
+              <div class="card-sub" style="margin-bottom:0">Aranceles por día y acumulado — mes seleccionado</div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="tDiario">
+              <thead><tr>
+                <th>Fecha</th>
+                <th class="right">ARS día</th>
+                <th class="right">ARS acumulado</th>
+                <th class="right">USD día</th>
+                <th class="right">USD acumulado</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
           </div>
         </div>
 
@@ -348,23 +371,70 @@ function renderMetrics(dm){
 function renderDiario(dm){
   const by={};
   dm.forEach(d=>{const k=d.conc.getDate();if(!by[k])by[k]={ars:0,usd:0};by[k].ars+=d.ars;by[k].usd+=d.usd;});
-  const[,m]=mesActivo.split('-');
-  const maxD=new Date(new Date().getFullYear(),+m,0).getDate();
-  const labels=[],ars=[],usd=[];
-  for(let i=1;i<=maxD;i++){labels.push(i);ars.push(by[i]?by[i].ars:0);usd.push(by[i]?by[i].usd:0);}
+  const[y,m]=mesActivo.split('-');
+  const maxD=new Date(+y,+m,0).getDate();
+  const labels=[],ars=[],usd=[],arsAcum=[],usdAcum=[];
+  let cumArs=0,cumUsd=0;
+  for(let i=1;i<=maxD;i++){
+    const v=by[i]||{ars:0,usd:0};
+    cumArs+=v.ars; cumUsd+=v.usd;
+    labels.push(i);
+    ars.push(v.ars); usd.push(v.usd);
+    arsAcum.push(cumArs); usdAcum.push(cumUsd);
+  }
   if(charts.diario)charts.diario.destroy();
-  charts.diario=new Chart(document.getElementById('cDiario'),{type:'bar',
+  charts.diario=new Chart(document.getElementById('cDiario'),{
     data:{labels,datasets:[
-      {label:'ARS',data:ars,backgroundColor:'rgba(74,222,128,0.75)',borderRadius:3,yAxisID:'y'},
-      {label:'USD MEP',data:usd,backgroundColor:'rgba(96,165,250,0.75)',borderRadius:3,yAxisID:'y2'},
+      {type:'bar',label:'ARS día',data:ars,backgroundColor:'rgba(74,222,128,0.65)',borderRadius:3,yAxisID:'y',order:2},
+      {type:'bar',label:'USD día',data:usd,backgroundColor:'rgba(96,165,250,0.65)',borderRadius:3,yAxisID:'y2',order:2},
+      {type:'line',label:'Acum. ARS',data:arsAcum,borderColor:'rgba(167,139,250,0.9)',backgroundColor:'transparent',borderWidth:2,pointRadius:0,pointHoverRadius:3,tension:0.3,yAxisID:'y',order:1},
+      {type:'line',label:'Acum. USD',data:usdAcum,borderColor:'rgba(56,189,248,0.9)',backgroundColor:'transparent',borderWidth:2,pointRadius:0,pointHoverRadius:3,tension:0.3,yAxisID:'y2',order:1},
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?fARS(ctx.raw):fUSD(ctx.raw)}}},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{
+        label:ctx=>{
+          if(ctx.dataset.label==='ARS día')return ' ARS día: '+fARS(ctx.raw);
+          if(ctx.dataset.label==='USD día')return ' USD día: '+fUSD(ctx.raw);
+          if(ctx.dataset.label==='Acum. ARS')return ' Acum. ARS: '+fARS(ctx.raw);
+          if(ctx.dataset.label==='Acum. USD')return ' Acum. USD: '+fUSD(ctx.raw);
+        }
+      }}},
       scales:{
         x:{ticks:{autoSkip:false,maxRotation:0,font:{size:9},color:'#566058'},grid:{color:'rgba(255,255,255,0.04)'}},
         y:{position:'left',ticks:{callback:v=>'$'+Math.round(v/1000)+'k',font:{size:9},color:'#566058'},grid:{color:'rgba(255,255,255,0.05)'}},
-        y2:{position:'right',ticks:{callback:v=>'U$S '+Math.round(v),font:{size:9},color:'#566058'},grid:{display:false}},
+        y2:{position:'right',ticks:{callback:v=>'U$S '+v.toFixed(0),font:{size:9},color:'#566058'},grid:{display:false}},
       }}
   });
+  renderTablaDiaria(by, maxD, +y, +m);
+}
+
+function renderTablaDiaria(by, maxD, y, m){
+  let cumArs=0, cumUsd=0;
+  const hoy=new Date();
+  const rows=[];
+  for(let i=1;i<=maxD;i++){
+    const v=by[i]||{ars:0,usd:0};
+    cumArs+=v.ars; cumUsd+=v.usd;
+    const fecha=new Date(y,m-1,i);
+    const esFuturo=fecha>hoy;
+    const esHoy=fecha.toDateString()===hoy.toDateString();
+    const esFinde=fecha.getDay()===0||fecha.getDay()===6;
+    const tieneData=v.ars>0||v.usd>0;
+    let rowStyle='';
+    if(esHoy)rowStyle='background:rgba(74,222,128,0.06);';
+    else if(esFinde&&!tieneData)rowStyle='opacity:0.4;';
+    else if(esFuturo&&!tieneData)rowStyle='opacity:0.3;';
+    const dd=String(i).padStart(2,'0');
+    const mm=String(m).padStart(2,'0');
+    rows.push(`<tr style="${rowStyle}">
+      <td class="mono" style="font-size:11px;color:${esHoy?'#4ade80':'#8a9a8c'}">${dd}/${mm}</td>
+      <td class="right mono" style="font-size:11px;color:${tieneData?'#e8ede9':'#566058'}">${tieneData||v.ars>0?fARS(v.ars):'—'}</td>
+      <td class="right mono" style="font-size:11px;font-weight:${esHoy?'500':'400'};color:${esHoy?'#4ade80':'#8a9a8c'}">${fARS(cumArs)}</td>
+      <td class="right mono" style="font-size:11px;color:${v.usd>0?'#60a5fa':'#566058'}">${v.usd>0?fUSD(v.usd):'—'}</td>
+      <td class="right mono" style="font-size:11px;color:${esHoy?'#60a5fa':'#8a9a8c'}">${fUSD(cumUsd)}</td>
+    </tr>`);
+  }
+  document.querySelector('#tDiario tbody').innerHTML=rows.join('');
 }
 
 function renderMensual(){
